@@ -5,21 +5,56 @@ import tkinter.filedialog
 from pathlib import Path
 from typing import List, Tuple, Union
 
-import PIL
 from PIL import ImageTk, Image
 from pprint import pprint
-
-
-# Taken from
-#   https://stackoverflow.com/questions/23064549/get-date-and-time-when-photo-was-taken-from-exif-data-using-pil
+import exif
+import pyheif
 
 def get_timestamp_of_media(file_path: Path):
-
     ex = str(os.path.splitext(file_path)[-1]).lower()
-    if ex not in ['.jpg']:
-        return None
+    if ex in ['.jpg']:
+        with open(file_path, 'rb') as img_file:
+            img = exif.Image(img_file)
+            # print(img.list_all())
+        print("")
+        print(file_path)
+        if not img.has_exif:
+            print("No exif")
+            return
+        datetime_original = (img.get('datetime_original'))
+        datetime = img.get('datetime')
+        print(datetime_original)
+        if datetime_original:
+            return datetime_original
+        elif datetime:
+            return datetime
+        else:
+            return None
+    elif ex in ['.heic']:
+        os.path.getctime()
 
-    print("Jpg: " + ex)
+
+    # try:
+    #     img = Image.open(file_path)
+    # except Exception as e:
+    #     print(f"Couldn't open file: {file_path}")
+    #     return None
+    #
+    # exif_data: dict = img.getexif()
+    #
+    # if exif_data is None:
+    #     print(f"NO EXIF: {file_path}")
+    #     return None
+    #
+    # print(exif_data)
+    # exif_keys = exif_data.keys()
+    # if 36867 in exif_keys:
+    #     date_time_original = exif_data[36867]
+    # else:
+    #     print(exif_data)
+    #     return None
+    # pprint(date_time_original)
+
     return 0
 
     # key = "DateTimeOriginal"
@@ -110,8 +145,6 @@ def get_images():
     print(f"Non-media files: {len(other)}")
     print(f"Directories: {len(directories)}")
     print(f"Already completed files: {len(completed_media_files)}")
-    # print("Files to convert:")
-    # pprint(media_files)
 
     temp_folder = os.path.join(selected_folder, "temp")
     if not os.path.exists(temp_folder):
@@ -126,8 +159,7 @@ def get_images():
         if date_time is None:
             files_without_metadata.append(full_path)
             continue
-        files_with_metadata.append((full_path, date_time))
-
+        files_with_metadata.append(full_path)
     pprint(files_with_metadata)
     pprint(files_without_metadata)
 
