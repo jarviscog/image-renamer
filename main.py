@@ -1,187 +1,229 @@
 import os
 import re
-import tkinter as tk
-import tkinter.filedialog
-from pathlib import Path
-from typing import List, Tuple, Union
-
-from PIL import ImageTk, Image
 from pprint import pprint
-import exif
-import pyheif
+from pathlib import Path
+import argparse
+from PIL import Image
+from datetime import datetime
+from pillow_heif import register_heif_opener
+import ffmpeg
 
-def get_timestamp_of_media(file_path: Path):
+class CatagorizedMedia:
+    def __init__(self, 
+                 total: list[str]= [],
+                 directories: list[str] = [], 
+                 files_to_convert: list[str] = [], 
+                 unsupported_type: list[str] = [], 
+                 completed: list[str] = []
+                 ):
+        self.total = total,
+        self.directories = directories,
+        self.files_to_convert = files_to_convert,
+        self.unsupported_type = unsupported_type,
+        self.completed = completed
+
+def get_jpg_timestamp(file_path) -> datetime | None: 
+    exif = Image.open(file_path).getexif()
+    # for item in (exif.items()):
+        # print(f"{item}")
+    if not exif:
+        raise Exception(f'Image {file_path} does not have EXIF data.')
+    if 36867 in exif.keys(): 
+        return exif[36867]
+    elif 306 in exif.keys():
+        return exif[306]
+    else:
+        return None
+
+def get_heic_timestamp(file_path: str) -> str | None: 
+    register_heif_opener()
+    file = Image.open(file_path)
+    exif = file.getexif()
+    # for key in exif.keys():
+    #    print(key, exif[key])
+    if not exif:
+        raise Exception(f'Image {file_path} does not have EXIF data.')
+    if 36867 in exif.keys(): 
+        return exif[36867]
+    elif 306 in exif.keys():
+        return exif[306]
+    else:
+        return None
+
+
+def get_mp4_timestamp(file_path: str) -> str | None: 
+
+    # metadata = ffmpeg.probe(file_path)["streams"]
+    time = os.path.getmtime(file_path)
+    pprint(time)
+    # for key in exif.keys():
+    #    print(key, exif[key])
+
+TIMESTAMP_FUNCTIONS = {
+        '.jpg': get_jpg_timestamp,
+        '.heic': get_heic_timestamp,
+        '.mp4': get_mp4_timestamp 
+        }
+
+def get_timestamp_of_media(file_path: str) -> str | None:
+    # Get the type of file
     ex = str(os.path.splitext(file_path)[-1]).lower()
-    if ex in ['.jpg']:
-        with open(file_path, 'rb') as img_file:
-            img = exif.Image(img_file)
-            # print(img.list_all())
-        print("")
-        print(file_path)
-        if not img.has_exif:
-            print("No exif")
-            return
-        datetime_original = (img.get('datetime_original'))
-        datetime = img.get('datetime')
-        print(datetime_original)
-        if datetime_original:
-            return datetime_original
-        elif datetime:
-            return datetime
-        else:
-            return None
-    elif ex in ['.heic']:
-        os.path.getctime()
+    # print(f"Extension: {ex}")
 
+    if ex not in TIMESTAMP_FUNCTIONS.keys():
+        print("Filetype not supported")
+        return None
+    timestamp = TIMESTAMP_FUNCTIONS[ex](file_path)
+    return timestamp
 
-    # try:
-    #     img = Image.open(file_path)
-    # except Exception as e:
-    #     print(f"Couldn't open file: {file_path}")
-    #     return None
-    #
-    # exif_data: dict = img.getexif()
-    #
-    # if exif_data is None:
-    #     print(f"NO EXIF: {file_path}")
-    #     return None
-    #
-    # print(exif_data)
-    # exif_keys = exif_data.keys()
-    # if 36867 in exif_keys:
-    #     date_time_original = exif_data[36867]
-    # else:
-    #     print(exif_data)
-    #     return None
-    # pprint(date_time_original)
+def get_filetype(filepath: str) -> str:
+    return str(os.path.splitext(filepath)[-1]).lower()
 
-    return 0
+def is_supported(filetype: str) -> bool:
+    return filetype in TIMESTAMP_FUNCTIONS.keys()
 
-    # key = "DateTimeOriginal"
-    # tag_by_id: dict = PIL.ExifTags.TAGS
-    # try:
-    #     im: PIL.Image.Image = PIL.Image.open(str(file_path))
-    # except FileNotFoundError:
-    #         return -1
-    # exif: PIL.Photo.Exif = im.getexif()
-    # if not exif:
-    #         return -1
-    # tag_by_name = {tag_by_id[dec_value]: exif[dec_value] for dec_value in exif if dec_value in tag_by_id}
-    # result_list = []
-    # if isinstance(key, int):
-    #     result_list.append(exif.get(key, None))
-    # try:
-    #     dec_value = int(key, 16)
-    #     result_list.append(exif.get(dec_value, None))
-    # except ValueError:
-    #     ...
-    # result_list.append(tag_by_name.get(key, None))
-    # return result_list if len(result_list) > 1 else result_list[0]
+def timestamp_to_filename(datetime: str) -> str | None:
+    
+    (date, time) = datetime.split(' ') 
+    (year, month, day) = date.split(':')
+    (hour, miniute, second) = time.split(':')
 
+    new_filename: str = year + month + day + "_" + hour + miniute + second
+    # print(new_filename)
+    return new_filename 
 
-selected_folder = ""
+def rename_file(old_name: str, new_name: str):
 
-root = tk.Tk()
-root.grid_rowconfigure(0, weight=1)
-root.columnconfigure(0, weight=1)
+    print("Rename: ", old_name)
 
-frame_main = tk.Frame(root)
-# frame_main = tk.Frame(root, bg="gray")
-
-frame_main.grid(sticky='news', pady=5, padx=5)
-
-file_select_entry = tk.Entry(master=frame_main, width=60, background='white')
-file_select_entry.insert(0, "Path")
-file_select_entry.configure(state='disabled')
-file_select_entry.grid(row=0, column=1, pady=5, sticky='nwe')
-
-
-def select_folder():
-    return_dir = tkinter.filedialog.askdirectory()
-    # print(return_dir)
-    global selected_folder
-    selected_folder = return_dir
-    file_select_entry.configure(state='normal')
-    file_select_entry.delete(0, tk.END)
-    file_select_entry.insert(index=0, string=return_dir)
-    file_select_entry.configure(state='disabled')
-
-
-file_selection_button = tk.Button(frame_main, text="Select Folder", command=select_folder)
-file_selection_button.grid(row=0, column=2, pady=5, sticky='nw')
-
-
-def get_images():
-    if selected_folder is None:
+def get_image_list(dir_path: Path) -> CatagorizedMedia | None:
+    if dir_path is None:
         return
 
-    print("Getting Images")
-    files = os.listdir(selected_folder)
+    files = os.listdir(dir_path)
 
     # Grab all files and find the status of them
-    media_files = []
-    completed_media_files = []
-    directories = []
-    other = []
+    files_to_convert: list[str] = []
+    completed_media_files: list[str] = []
+    directories: list[str] = []
+    unsupported_type: list[str] = []
     for file in files:
-        full_path = os.path.join(selected_folder, file)
-        file_extension = str(os.path.splitext(full_path)[-1]).lower()
+        full_path = os.path.join(dir_path, file)
+        file_extension = get_filetype(full_path);
 
         if os.path.isdir(full_path):
             directories.append(full_path)
             continue
-        if file_extension not in [".jpg", '.mp4', '.png', '.heic', '.mov']:
-            other.append(full_path)
+        if not is_supported(file_extension):
+            unsupported_type.append(full_path)
             continue
-        if re.match(pattern="[0-9]{8}_[0-9]{6}[.]", string=file):
-            completed_media_files.append(full_path)
+        if re.match(pattern="[0-9]{8}_[0-9]{6}[.]", string=file): # Pattern: YYYYMMDD_HHMMSS. We don't want to touch these
+            completed_media_files.append(file)
             continue
 
-        media_files.append(full_path)
+        files_to_convert.append(full_path)
 
-    # Stats about what was found
-    print(f"Items: {len(files)}")
-    print(f"Media files: {len(media_files)}")
-    print(f"Non-media files: {len(other)}")
-    print(f"Directories: {len(directories)}")
-    print(f"Already completed files: {len(completed_media_files)}")
+    pprint(unsupported_type)
 
-    temp_folder = os.path.join(selected_folder, "temp")
-    if not os.path.exists(temp_folder):
-        os.mkdir(temp_folder)
+    media = CatagorizedMedia(
+            total=files,
+            directories = directories,
+            files_to_convert = files_to_convert,
+            unsupported_type = unsupported_type,
+            completed = completed_media_files
+            )
+    return media 
 
-    files_with_metadata = []
-    files_without_metadata = []
-    for file in media_files:
-        full_path = os.path.join(selected_folder, file)
+def main():
 
-        date_time = get_timestamp_of_media(full_path)
-        if date_time is None:
-            files_without_metadata.append(full_path)
-            continue
-        files_with_metadata.append(full_path)
-    pprint(files_with_metadata)
-    pprint(files_without_metadata)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-f', '--file', help='file to rename', type=str)
+    parser.add_argument('-d', '--directory', help='directory of files to rename', type=str)
+    args = parser.parse_args()
+
+    if args.file:
+        print("File was supplied")
+        date_time = get_timestamp_of_media(args.file)
+        if not date_time:
+            print(f"Could not get datetime of {date_time}")
+            return
+        print(f"Datetime is: {date_time}")
+        new_filename = timestamp_to_filename(date_time)
+        if not new_filename:
+            print(f"Could not convert to filename: {date_time}")
+            return
+        print("{:<20} -> {:<20}".format(args.file, new_filename))
+        ans = input("Would you like to rename the files? (y/n)")
+        if ans == "y": 
+            rename_file(args.file, new_filename)
+        else:
+            return
 
 
-generate_list_button = tk.Button(frame_main, text="List Images", height=1, command=get_images)
-generate_list_button.grid(row=1, column=1, columnspan=2, pady=5, padx=200, sticky='nswe')
+    elif args.directory:
+        print("Directory was supplied")
+
+        # Index all of the files in the filepath
+        media_lists = get_image_list(args.directory)
+        if not media_lists:
+            raise NotImplementedError
+
+        # Stats about what was found
+        print(f"Total: {len(media_lists.total[0])}")
+        print(f"Directories: {len(media_lists.directories[0])}")
+        print(f"Files to convert: {len(media_lists.files_to_convert[0])}")
+        print(f"Unsupported filetype: {len(media_lists.unsupported_type[0])}")
+        print(f"Already completed files: {len(media_lists.completed)}")
+
+        success = []
+        error = []
+        new_filenames = []
+
+        print("")
+        print("New file names: ")
+
+        # TODO: Why do I need to get the first index here?
+        for file in media_lists.files_to_convert[0]:
+
+            date_time = get_timestamp_of_media(file)
+            extension = get_filetype(file)
+            
+            if date_time is None:
+                error.append(file)
+                continue
+            new_filename = timestamp_to_filename(date_time)
+            if not new_filename:
+                print(f"Could not convert to filename: {date_time}")
+                error.append(file)
+                continue
+
+            new_filename = new_filename + extension
+            print("{:<20} -> {:<20}".format(file, new_filename))
+            success.append(file)
+            new_filenames.append((file, new_filename))
 
 
-image_visualization_grid = tk.Label(frame_main, text="Images", height=30)
-image_visualization_grid.grid(row=2, column=0, pady=5, sticky='nwe', columnspan=3)
-# raw_image = Image.open('image.png')
-# scaled_img = raw_image.resize((100,100))
-# img = ImageTk.PhotoImage(scaled_img)
-# panel = tk.Label(root, image=img, width=100, height=100)
-# panel.grid(row=2, column=2, pady=(5,0), sticky='nw')
-def rename_images():
-    if selected_folder != None:
-        print(f"Renaming Images in {selected_folder}")
+        print('Files to rename: ')
+        pprint(success)
+        
+        print('Failed files: ')
+        pprint(error)
 
-confirm_button = tk.Button(frame_main, text="Generate", width=10, height=3, command=rename_images)
-confirm_button.grid(row=3, column=1, columnspan=2, pady=5, padx=200, sticky='news')
+        print('Unsupported filetypes: ')
+        pprint(media_lists.unsupported_type[0])
+        print('\n')
 
-root.mainloop()
+        ans = input("Would you like to rename the files? (y/n)")
+        if ans == "y": 
+            for (old_filename, new_filename) in new_filenames:
+                print(old_filename)
+                rename_file(old_filename, new_filename)
+        else:
+            return
+     
 
+
+
+if __name__ == "__main__":
+    main()
 
