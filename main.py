@@ -59,7 +59,6 @@ def get_png_timestamp(file_path) -> str | None:
     if m: 
         new_string = m[3].replace("T", " ")
         new_string = new_string.replace("-", ":")
-        print(new_string)
         return new_string
     
     return None
@@ -84,7 +83,17 @@ def get_mp4_timestamp(file_path: str) -> str | None:
 
     # metadata = ffmpeg.probe(file_path)["streams"]
     time = os.path.getmtime(file_path)
-    pprint(time)
+    timestamp = datetime.fromtimestamp(time).strftime('%Y:%m:%d %H:%M:%S')
+    return timestamp
+    # for key in exif.keys():
+    #    print(key, exif[key])
+
+def get_mov_timestamp(file_path: str) -> str | None: 
+
+    # metadata = ffmpeg.probe(file_path)["streams"]
+    time = os.path.getmtime(file_path)
+    timestamp = datetime.fromtimestamp(time).strftime('%Y:%m:%d %H:%M:%S')
+    return timestamp
     # for key in exif.keys():
     #    print(key, exif[key])
 
@@ -92,7 +101,8 @@ TIMESTAMP_FUNCTIONS = {
         '.jpg': get_jpg_timestamp,
         '.png': get_png_timestamp,
         '.heic': get_heic_timestamp,
-        '.mp4': get_mp4_timestamp 
+        '.mp4': get_mp4_timestamp,
+        '.mov': get_mov_timestamp 
         }
 
 def get_timestamp_of_media(file_path: str) -> str | None:
@@ -124,7 +134,8 @@ def timestamp_to_filename(datetime: str) -> str | None:
 
 def rename_file(old_name: str, new_name: str):
 
-    print("Rename: ", old_name)
+    print("Rename: ", old_name, " -> ", old_name)
+    raise NotImplementedError
 
 def get_image_list(dir_path: Path) -> CatagorizedMedia | None:
     if dir_path is None:
@@ -172,7 +183,6 @@ def main():
     args = parser.parse_args()
 
     if args.file:
-        # print("File was supplied")
         date_time = get_timestamp_of_media(args.file)
         if not date_time:
             print(f"Could not get datetime of {date_time}")
@@ -191,8 +201,6 @@ def main():
 
 
     elif args.directory:
-        print("Directory was supplied")
-
         # Index all of the files in the filepath
         media_lists = get_image_list(args.directory)
         if not media_lists:
@@ -213,8 +221,8 @@ def main():
         # TODO: Why do I need to get the first index here?
         for file in media_lists.files_to_convert[0]:
 
-            date_time = get_timestamp_of_media(file)
             extension = get_filetype(file)
+            date_time = get_timestamp_of_media(file)
             
             if date_time is None:
                 error.append(file)
@@ -234,7 +242,8 @@ def main():
 
 
         print('Files to rename: ')
-        for old_filename, new_filename in new_filenames:
+        sorted_filenames = sorted(new_filenames, key= lambda x: x[1])
+        for old_filename, new_filename in sorted_filenames:
             print("{:<20} -> {:<20}".format(os.path.split(old_filename)[1], os.path.split(new_filename)[1]))
         
         print('Failed files: ')
@@ -242,7 +251,11 @@ def main():
 
         print('Unsupported filetypes: ')
         pprint(media_lists.unsupported_type[0])
-        print('\n')
+        print('')
+
+        oldest_timestamp = datetime.strptime(os.path.split(sorted_filenames[0][1])[1].split(".")[0], "%Y%m%d_%H%M%S")
+        newest_timestamp = datetime.strptime(os.path.split(sorted_filenames[-1][1])[1].split(".")[0], "%Y%m%d_%H%M%S")
+        print(f"Time range of files: {oldest_timestamp.strftime('%a %d %b %Y, %I:%M%p')} -> {newest_timestamp.strftime('%a %d %b %Y, %I:%M%p')}")
 
         ans = input("Would you like to rename the files? (y/n)")
         if ans == "y": 
