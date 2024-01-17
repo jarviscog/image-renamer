@@ -7,6 +7,7 @@ import argparse
 from PIL import Image
 from datetime import datetime
 from pillow_heif import register_heif_opener
+from random import randint
 
 # TODO: Create a return class from the get_ functions for each type that includes info, such as where the filename came from (exif, filename) etc.
 
@@ -94,7 +95,10 @@ def get_heic_timestamp(file_path: str) -> str | None:
     timestamp = timestamp_from_filename(file_path)
     if timestamp: return timestamp
 
-    return None
+    # From file metadata
+    time = os.path.getmtime(file_path)
+    timestamp = datetime.fromtimestamp(time).strftime('%Y:%m:%d %H:%M:%S')
+    return timestamp
 
 def get_mp4_timestamp(file_path: str) -> str | None: 
 
@@ -126,7 +130,7 @@ def get_mov_timestamp(file_path: str) -> str | None:
 
 def timestamp_from_filename(file_path: str) -> str | None:
     # Try a few different regexes
-    r = re.match(r".*(([0-9]{4})([:\/-])([0-9]{2})\3([0-9]{2}).([0-9]{2})([:\/-])([0-9]{2})\3([0-9]{2}))", file_path);
+    r = re.match(r".*((\d{4})([:\/-])(\d{2})\3(\d{2}).(\d{2})([:\/-])(\d{2})\3(\d{2}))", file_path);
     if r:
         # print("Getting timestamp from filename: {}".format(file_path))
         year = r[2]
@@ -144,6 +148,7 @@ def timestamp_from_filename(file_path: str) -> str | None:
 
 TIMESTAMP_FUNCTIONS = {
         '.jpg': get_jpg_timestamp,
+        '.jpeg': get_jpg_timestamp,
         '.png': get_png_timestamp,
         '.heic': get_heic_timestamp,
         '.mp4': get_mp4_timestamp,
@@ -179,8 +184,14 @@ def timestamp_to_filename(datetime: str) -> str | None:
 
 def rename_file(old_name: str, new_name: str):
 
-    print("Rename: ", old_name, " -> ", old_name)
-    raise NotImplementedError
+    print("Rename: ", old_name, " -> ", new_name)
+    try_name = new_name
+    (new_name_base, ex) = os.path.splitext(new_name)
+    while os.path.exists(try_name):
+        print()
+        ri = str(randint(100, 199))
+        try_name = new_name_base + "_" + ri + ex
+    os.rename(old_name, try_name)
 
 def get_image_list(dir_path: Path) -> CatagorizedMedia | None:
     if dir_path is None:
@@ -203,7 +214,7 @@ def get_image_list(dir_path: Path) -> CatagorizedMedia | None:
         if not is_supported(file_extension):
             unsupported_type.append(full_path)
             continue
-        if re.match(pattern="[0-9]{8}_[0-9]{6}[.]", string=file): # Pattern: YYYYMMDD_HHMMSS. We don't want to touch these
+        if re.match(pattern="[0-9]{8}_[0-9]{6}.*", string=file): # Pattern: YYYYMMDD_HHMMSS. We don't want to touch these
             completed_media_files.append(file)
             continue
 
@@ -290,6 +301,7 @@ def main():
         sorted_filenames = sorted(new_filenames, key= lambda x: x[1])
         for old_filename, new_filename in sorted_filenames:
             print("{:<40} -> {:<40}".format(os.path.split(old_filename)[1], os.path.split(new_filename)[1]))
+            # print("{:<40} -> {:>150}".format(old_filename, new_filename))
         
         print('Failed files: ')
         pprint(error)
@@ -298,6 +310,9 @@ def main():
         pprint(media_lists.unsupported_type[0])
         print('')
 
+        if len(sorted_filenames) == 0:
+            print("No files to convert")
+            return
         oldest_timestamp = datetime.strptime(os.path.split(sorted_filenames[0][1])[1].split(".")[0], "%Y%m%d_%H%M%S")
         newest_timestamp = datetime.strptime(os.path.split(sorted_filenames[-1][1])[1].split(".")[0], "%Y%m%d_%H%M%S")
         print(f"Time range of files: {oldest_timestamp.strftime('%a %d %b %Y, %I:%M%p')} -> {newest_timestamp.strftime('%a %d %b %Y, %I:%M%p')}")
@@ -305,7 +320,6 @@ def main():
         ans = input("Would you like to rename the files? (y/n)")
         if ans == "y": 
             for (old_filename, new_filename) in new_filenames:
-                print(old_filename)
                 rename_file(old_filename, new_filename)
         else:
             return
