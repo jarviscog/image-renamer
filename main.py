@@ -7,7 +7,8 @@ import argparse
 from PIL import Image
 from datetime import datetime
 from pillow_heif import register_heif_opener
-import ffmpeg
+
+# TODO: Create a return class from the get_ functions for each type that includes info, such as where the filename came from (exif, filename) etc.
 
 class CatagorizedMedia:
     def __init__(self, 
@@ -23,79 +24,123 @@ class CatagorizedMedia:
         self.unsupported_type = unsupported_type,
         self.completed = completed
 
-def get_jpg_timestamp(file_path) -> datetime | None: 
+def get_jpg_timestamp(file_path: str) -> str | None: 
     exif = Image.open(file_path).getexif()
-    for item in (exif.items()):
-        print(f"{item}")
-    if not exif:
-        raise Exception(f'Image {file_path} does not have EXIF data.')
-    if 36867 in exif.keys(): 
-        return exif[36867]
-    elif 306 in exif.keys():
-        return exif[306]
-    else:
-        return None
+    if exif:
+        if 36867 in exif.keys(): 
+            return exif[36867]
+        elif 306 in exif.keys():
+            return exif[306]
+    # else: 
+        # print(f"No exif found: {file_path}")
+
+    # From filename
+    timestamp = timestamp_from_filename(file_path)
+    if timestamp: return timestamp
+
+    time = os.path.getmtime(file_path)
+    timestamp = datetime.fromtimestamp(time).strftime('%Y:%m:%d %H:%M:%S')
+    return timestamp
 
 def get_png_timestamp(file_path) -> str | None: 
     file = Image.open(file_path)
     file.load()
-    exif = file.getexif()
-    # for key in exif.keys(): 
-        # print(key, exif[key])
 
     # Try standard exif
-    if 36867 in exif.keys(): 
-        return exif[36867]
-    elif 306 in exif.keys():
-        return exif[306]
+    exif = file.getexif()
+    if exif:
+        if 36867 in exif.keys(): 
+            return exif[36867]
+        elif 306 in exif.keys():
+            return exif[306]
+    # else:
+        # print(f"No exif found: {file_path}")
 
     # If the file is from photoshop, we can try and get the date created 
-    # XML is a binary stream, so we need to remove some characters that mess with the regex
-    new_string = ""
-    for char in file.info['XML:com.adobe.xmp']:
-        if char != '\n':
-            new_string += char 
-    m = re.match(r'(.*)(<photoshop:DateCreated>)(.*)(<\/photoshop:DateCreated>)(.*)', new_string)
-    if m: 
-        new_string = m[3].replace("T", " ")
-        new_string = new_string.replace("-", ":")
-        return new_string
+    if 'XML:com.adobe.xmp' in file.info.keys():
+        # XML is a binary stream, so we need to remove some characters that mess with the regex
+        new_string = ""
+        for char in file.info['XML:com.adobe.xmp']:
+            if char != '\n':
+                new_string += char 
+        m = re.match(r'(.*)(<photoshop:DateCreated>)(.*)(<\/photoshop:DateCreated>)(.*)', new_string)
+        if m: 
+            new_string = m[3].replace("T", " ")
+            new_string = new_string.replace("-", ":")
+            return new_string
+
+    # From filename
+    timestamp = timestamp_from_filename(file_path)
+    if timestamp: return timestamp
     
-    return None
+    # From file metadata
+    time = os.path.getmtime(file_path)
+    timestamp = datetime.fromtimestamp(time).strftime('%Y:%m:%d %H:%M:%S')
+    return timestamp
 
 def get_heic_timestamp(file_path: str) -> str | None: 
+
+    # From exif
     register_heif_opener()
-    file = Image.open(file_path)
-    exif = file.getexif()
-    # for key in exif.keys():
-    #    print(key, exif[key])
+    exif = Image.open(file_path).getexif()
     if not exif:
         raise Exception(f'Image {file_path} does not have EXIF data.')
     if 36867 in exif.keys(): 
         return exif[36867]
     elif 306 in exif.keys():
         return exif[306]
-    else:
-        return None
 
+    # From filename
+    timestamp = timestamp_from_filename(file_path)
+    if timestamp: return timestamp
+
+    return None
 
 def get_mp4_timestamp(file_path: str) -> str | None: 
 
+    # TODO: There might be a way to get the timestamp from ffmpeg
     # metadata = ffmpeg.probe(file_path)["streams"]
+
+    # From filename
+    timestamp = timestamp_from_filename(file_path)
+    if timestamp: return timestamp
+
+    # From file metadata
     time = os.path.getmtime(file_path)
     timestamp = datetime.fromtimestamp(time).strftime('%Y:%m:%d %H:%M:%S')
     return timestamp
-    # for key in exif.keys():
-    #    print(key, exif[key])
 
 def get_mov_timestamp(file_path: str) -> str | None: 
 
+    # TODO: There might be a way to get the timestamp from ffmpeg
     # metadata = ffmpeg.probe(file_path)["streams"]
+
+    # From filename
+    timestamp = timestamp_from_filename(file_path)
+    if timestamp: return timestamp
+
+    # From file metadata
     time = os.path.getmtime(file_path)
     timestamp = datetime.fromtimestamp(time).strftime('%Y:%m:%d %H:%M:%S')
     return timestamp
-    # for key in exif.keys():
-    #    print(key, exif[key])
+
+def timestamp_from_filename(file_path: str) -> str | None:
+    # Try a few different regexes
+    r = re.match(r".*(([0-9]{4})([:\/-])([0-9]{2})\3([0-9]{2}).([0-9]{2})([:\/-])([0-9]{2})\3([0-9]{2}))", file_path);
+    if r:
+        # print("Getting timestamp from filename: {}".format(file_path))
+        year = r[2]
+        month = r[4]
+        day = r[5]
+        hour = r[6]
+        miniute = r[8]
+        second = r[9]
+        timestamp = "{}:{}:{} {}:{}:{}".format(year, month, day, hour, miniute, second)
+        # print(timestamp)
+        return timestamp
+
+    return None
+
 
 TIMESTAMP_FUNCTIONS = {
         '.jpg': get_jpg_timestamp,
@@ -244,7 +289,7 @@ def main():
         print('Files to rename: ')
         sorted_filenames = sorted(new_filenames, key= lambda x: x[1])
         for old_filename, new_filename in sorted_filenames:
-            print("{:<20} -> {:<20}".format(os.path.split(old_filename)[1], os.path.split(new_filename)[1]))
+            print("{:<40} -> {:<40}".format(os.path.split(old_filename)[1], os.path.split(new_filename)[1]))
         
         print('Failed files: ')
         pprint(error)
