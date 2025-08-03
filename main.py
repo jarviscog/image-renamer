@@ -8,6 +8,7 @@ from PIL import Image
 from datetime import datetime
 from pillow_heif import register_heif_opener
 from random import randint
+import exifread
 
 # TODO: Create a return class from the get_ functions for each type that includes info, such as where the filename came from (exif, filename) etc.
 
@@ -128,6 +129,22 @@ def get_mov_timestamp(file_path: str) -> str | None:
     timestamp = datetime.fromtimestamp(time).strftime('%Y:%m:%d %H:%M:%S')
     return timestamp
 
+
+def get_webp_timestamp(filepath):
+    with open(filepath, 'rb') as f:
+        tags = exifread.process_file(f, stop_tag="EXIF DateTimeOriginal", details=False)
+        time = tags.get("EXIF DateTimeOriginal")
+        if time:
+            return str(time)
+    if not time:
+        time = os.path.getmtime(filepath)
+
+    if time:
+        timestamp = datetime.fromtimestamp(time).strftime('%Y:%m:%d %H:%M:%S')
+        return timestamp
+    return None
+
+
 def timestamp_from_filename(file_path: str) -> str | None:
     # Try a few different regexes
     r = re.match(r".*((\d{4})([:\/-])(\d{2})\3(\d{2}).(\d{2})([:\/-])(\d{2})\3(\d{2}))", file_path);
@@ -152,7 +169,8 @@ TIMESTAMP_FUNCTIONS = {
         '.png': get_png_timestamp,
         '.heic': get_heic_timestamp,
         '.mp4': get_mp4_timestamp,
-        '.mov': get_mov_timestamp 
+        '.mov': get_mov_timestamp,
+        '.webp': get_webp_timestamp 
         }
 
 def get_timestamp_of_media(file_path: str) -> str | None:
@@ -229,6 +247,7 @@ def get_image_list(dir_path: Path) -> CategorizedMedia | None:
             unsupported_type = unsupported_type,
             completed = completed_media_files
             )
+
     return media 
 
 def main():
@@ -324,9 +343,6 @@ def main():
         else:
             return
      
-
-
-
 if __name__ == "__main__":
     main()
 
