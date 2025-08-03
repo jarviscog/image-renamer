@@ -1,0 +1,7 @@
+cffi==1.16.0
+exif==1.6.0
+Pillow==10.1.0
+pillow-heif==0.14.0
+plum-py==0.8.7
+pycparser==2.21
+PyExifTool==0.5.6
