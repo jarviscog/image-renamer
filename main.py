@@ -11,7 +11,7 @@ from random import randint
 
 # TODO: Create a return class from the get_ functions for each type that includes info, such as where the filename came from (exif, filename) etc.
 
-class CatagorizedMedia:
+class CategorizedMedia:
     def __init__(self, 
                  total: list[str]= [],
                  directories: list[str] = [], 
@@ -193,7 +193,7 @@ def rename_file(old_name: str, new_name: str):
         try_name = new_name_base + "_" + ri + ex
     os.rename(old_name, try_name)
 
-def get_image_list(dir_path: Path) -> CatagorizedMedia | None:
+def get_image_list(dir_path: Path) -> CategorizedMedia | None:
     if dir_path is None:
         return
 
@@ -222,7 +222,7 @@ def get_image_list(dir_path: Path) -> CatagorizedMedia | None:
 
     pprint(unsupported_type)
 
-    media = CatagorizedMedia(
+    media = CategorizedMedia(
             total=files,
             directories = directories,
             files_to_convert = files_to_convert,
